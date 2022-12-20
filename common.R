@@ -4,6 +4,7 @@ library(randomForest)
 library(caret)
 library(MASS)
 library(kernlab)
+library(RColorBrewer)
 
 error.rate <- function(dataA, dataB) sum( dataA != dataB ) / length(dataB)
 
@@ -306,12 +307,12 @@ gap.statistic <- function(x, max.k, b.references) {
 
   for (k in 1:max.k) {
     # Calculo la dispersión para este k con los datos originales
-    Wk <- kmeans(x, cent=k)$tot.withinss
+    Wk <- kmeans(x, cent=k, nstart=10, iter.max=30)$tot.withinss
 
     # Calculo la dispersión para los datasets de referencia
     Wkb <- double(b.references)
     for (b in 1:b.references) {
-      Wkb[b] <- kmeans(reference.datasets[[b]], cent=k, nstart=10)$tot.withinss
+      Wkb[b] <- kmeans(reference.datasets[[b]], cent=k, nstart=10, iter.max=30)$tot.withinss
     }
 
     # Un poco de trabalengua estadístico
@@ -356,7 +357,7 @@ stability.score <- function(n, ind1, cc1, ind2, cc2) {
 # la cantidad de replicas que voy a generar para cada k
 # y el porcentaje utilizado para hacer subsampling
 stability <- function(x, max.k, replics, sub.percent=0.9) {
-  mean.scores = double(max.k)
+  all.scores = list()
   rows <- dim(x)[1]
 
   # Preparo los indices para subsamplear para cada k (datos perturbados)
@@ -365,11 +366,11 @@ stability <- function(x, max.k, replics, sub.percent=0.9) {
     subsamples.ind <- rbind(subsamples.ind, sample(rows,sub.percent*rows))
   }
 
-  for (k in 1:max.k) {
+  for (k in 2:max.k) {
     # Hago kmeans para cada subset de datos perturbados
     kmeans <- c()
     for (rep in 1:replics) {
-      kmeans <- rbind(kmeans, kmeans(x[subsamples.ind[rep,],], cent=k,nstart=10)$cluster)
+      kmeans <- rbind(kmeans, kmeans(x[subsamples.ind[rep,],], cent=k,nstart=10, iter.max=30)$cluster)
     }
 
     # Calculo la estabilidad entre cada par de réplicas para luego calcular la media
@@ -379,12 +380,11 @@ stability <- function(x, max.k, replics, sub.percent=0.9) {
         scores <- c(scores, stability.score(rows, subsamples.ind[ind1,], kmeans[ind1,], subsamples.ind[ind2,], kmeans[ind2, ]))
       }
     }
-    mean.scores[k] <- mean(scores)
+    all.scores[[k]] <- scores
   }
-  # Le pongo NaN a 1 porque si hay un solo cluster la estabilidad es perfecta
-  # y siempre va a ser el máximo, dejo k=1 en el vector también para que
-  # scores[best.k] me de el score correspondiente
-  mean.scores[1] <- NaN
 
-  return(list(best.k=which.max(mean.scores), scores=mean.scores))
+  sorted <- lapply(all.scores, sort)
+	cumulative <- lapply(sorted, cumsum)
+	
+	return(list(sorted=sorted, cumulative=cumulative))
 }
