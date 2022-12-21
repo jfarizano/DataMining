@@ -4,7 +4,6 @@ library(randomForest)
 library(caret)
 library(MASS)
 library(kernlab)
-library(RColorBrewer)
 
 error.rate <- function(dataA, dataB) sum( dataA != dataB ) / length(dataB)
 
